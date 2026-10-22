@@ -302,7 +302,7 @@ end
 
 ### Visual Mode Selection
 
-1. Enter visual mode: `v` or `V`
+1. Enter visual mode: `v`, `V`, or `<C-v>`
 2. Select the code range
 3. Press `<leader>rc` to add a comment to the selection
 
@@ -466,7 +466,7 @@ require('code-review').setup({
 
 ```bash
 # Install formatter and linter
-cargo install stylua
+cargo install stylua --features luajit
 luarocks install luacheck
 
 # Clone test dependencies
