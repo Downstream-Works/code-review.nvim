@@ -122,4 +122,32 @@ T["utils integration"] = function()
   helpers.expect.match(filename, "code%-review%-.*%.md")
 end
 
+T["blockwise selection context"] = function()
+  local utils = require("code-review.utils")
+  local original_buf = vim.api.nvim_get_current_buf()
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(buf)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+    "outside before",
+    "  selected_first()",
+    "",
+    "  selected_last()",
+    "outside after",
+  })
+
+  -- Select lines 2-4 in blockwise visual mode
+  vim.api.nvim_win_set_cursor(0, { 2, 3 })
+  vim.cmd("normal! " .. vim.api.nvim_replace_termcodes("<C-v>jj", true, false, true))
+  local context = utils.get_selection_context()
+
+  -- Restore the original buffer before checking the captured context
+  vim.cmd("normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, false, true))
+  vim.api.nvim_set_current_buf(original_buf)
+  vim.api.nvim_buf_delete(buf, { force = true })
+
+  MiniTest.expect.equality(context.line_start, 2)
+  MiniTest.expect.equality(context.line_end, 4)
+  MiniTest.expect.equality(context.lines, { "  selected_first()", "", "  selected_last()" })
+end
+
 return T

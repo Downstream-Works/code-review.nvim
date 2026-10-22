@@ -79,7 +79,7 @@ function M.get_selection_context(context_lines)
     bufnr = bufnr,
   }
 
-  if mode:match("[vV]") then
+  if mode:match("[vV\22]") then
     -- Visual mode
     local start_line, _, end_line, _ = M.get_visual_range()
     context.line_start = start_line

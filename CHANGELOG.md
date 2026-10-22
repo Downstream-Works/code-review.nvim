@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Preserve the selected line range when adding comments from blockwise visual mode
+
 ## [0.6.0] - 2025-12-12
 
 ### Added
