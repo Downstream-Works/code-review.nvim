@@ -18,6 +18,29 @@ helpers.new_child_neovim = function()
   return MiniTest.new_child_neovim({ args = args_init })
 end
 
+helpers.with_selection = function(lines, cursor, keys, capture)
+  local original_buf = vim.api.nvim_get_current_buf()
+  local original_selection = vim.o.selection
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(buf)
+  vim.api.nvim_buf_set_name(buf, vim.fn.tempname() .. ".lua")
+  vim.bo[buf].tabstop = 8
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.api.nvim_win_set_cursor(0, cursor)
+  vim.cmd("normal! " .. vim.api.nvim_replace_termcodes(keys, true, false, true))
+
+  local ok, result = pcall(capture or require("code-review.utils").get_selection_context)
+
+  vim.cmd("normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, false, true))
+  vim.o.selection = original_selection
+  vim.api.nvim_set_current_buf(original_buf)
+  vim.api.nvim_buf_delete(buf, { force = true })
+  if not ok then
+    error(result)
+  end
+  return result
+end
+
 -- Test directory utilities
 helpers.test_dir = vim.fn.getcwd() .. "/tests/test_dir"
 helpers.test_dir_absolute = vim.fn.fnamemodify(helpers.test_dir, ":p"):gsub("/$", "")

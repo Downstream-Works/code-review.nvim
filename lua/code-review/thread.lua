@@ -12,6 +12,8 @@
 ---@field file string File path
 ---@field line_start number Start line
 ---@field line_end number End line
+---@field col_start number|nil Visual selection start column
+---@field col_end number|nil Visual selection end column
 ---@field comment string Comment text
 ---@field author string Comment author
 ---@field timestamp number Creation timestamp
@@ -50,6 +52,8 @@ function M.create_reply(parent_comment, reply_text, author)
     file = parent_comment.file,
     line_start = parent_comment.line_start,
     line_end = parent_comment.line_end,
+    col_start = parent_comment.col_start,
+    col_end = parent_comment.col_end,
     comment = reply_text,
     author = author or vim.fn.expand("$USER"),
     timestamp = os.time(),

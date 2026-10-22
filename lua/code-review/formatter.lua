@@ -2,6 +2,21 @@ local M = {}
 
 local config = require("code-review.config")
 
+---@param comment table
+---@return string
+local function format_range(comment)
+  if comment.col_start and comment.col_end then
+    if comment.line_start == comment.line_end then
+      return string.format("%d:%d-%d", comment.line_start, comment.col_start, comment.col_end)
+    end
+    return string.format("%d:%d-%d:%d", comment.line_start, comment.col_start, comment.line_end, comment.col_end)
+  end
+  if comment.line_start == comment.line_end then
+    return tostring(comment.line_start)
+  end
+  return string.format("%d-%d", comment.line_start, comment.line_end)
+end
+
 --- Format comments to markdown
 ---@param comments table[]
 ---@return string
@@ -41,9 +56,9 @@ local function format_markdown(comments)
     for _, comment in ipairs(file_comments) do
       -- Location header
       if comment.line_start == comment.line_end then
-        table.insert(lines, string.format("### Line %d", comment.line_start))
+        table.insert(lines, "### Line " .. format_range(comment))
       else
-        table.insert(lines, string.format("### Lines %d-%d", comment.line_start, comment.line_end))
+        table.insert(lines, "### Lines " .. format_range(comment))
       end
 
       -- Add timestamp
@@ -76,12 +91,7 @@ end
 local function format_minimal(comments)
   local lines = {}
   for _, comment in ipairs(comments) do
-    local location
-    if comment.line_start == comment.line_end then
-      location = string.format("%s:L%d", comment.file, comment.line_start)
-    else
-      location = string.format("%s:L%d-%d", comment.file, comment.line_start, comment.line_end)
-    end
+    local location = comment.file .. ":L" .. format_range(comment)
     -- Join multi-line comments into single line
     local text = comment.comment:gsub("\n", " ")
     table.insert(lines, location .. ": " .. text)
@@ -123,10 +133,9 @@ function M.format_single(comment, opts)
 
   if include_header then
     -- Header with file and line info
-    table.insert(
-      lines,
-      string.format("%s## %s:%d-%d%s", colors.header, comment.file, comment.line_start, comment.line_end, colors.reset)
-    )
+    local range = comment.col_start and comment.col_end and format_range(comment)
+      or string.format("%d-%d", comment.line_start, comment.line_end)
+    table.insert(lines, string.format("%s## %s:%s%s", colors.header, comment.file, range, colors.reset))
     table.insert(lines, "")
   end
 
@@ -199,26 +208,27 @@ function M.parse_markdown(content)
         table.insert(comments, current_comment)
       end
 
-      local single = line:match("^###%s+Line%s+(%d+)")
-      if single then
+      local range = line:match("^###%s+Lines?%s+(.+)$")
+      local start, col_start, end_, col_end = range:match("^(%d+):(%d+)%-(%d+):(%d+)$")
+      if not start then
+        start, col_start, col_end = range:match("^(%d+):(%d+)%-(%d+)$")
+        end_ = start
+      end
+      if not start then
+        start, end_ = range:match("^(%d+)%-(%d+)$")
+        start = start or range:match("^(%d+)$")
+        end_ = end_ or start
+      end
+      if start then
         current_comment = {
           file = current_comment and current_comment.file,
-          line_start = tonumber(single),
-          line_end = tonumber(single),
+          line_start = tonumber(start),
+          line_end = tonumber(end_),
+          col_start = tonumber(col_start),
+          col_end = tonumber(col_end),
           context_lines = {},
           comment = "",
         }
-      else
-        local start, end_ = line:match("^###%s+Lines%s+(%d+)%-(%d+)")
-        if start and end_ then
-          current_comment = {
-            file = current_comment and current_comment.file,
-            line_start = tonumber(start),
-            line_end = tonumber(end_),
-            context_lines = {},
-            comment = "",
-          }
-        end
       end
       i = i + 1
       goto continue
@@ -227,7 +237,6 @@ function M.parse_markdown(content)
     -- Code block markers
     if line == "```" then
       in_code_block = not in_code_block
-      i = i + 1
       goto continue
     end
 
@@ -238,7 +247,6 @@ function M.parse_markdown(content)
       if num and code then
         table.insert(current_comment.context_lines, code)
       end
-      i = i + 1
       goto continue
     end
 
