@@ -1,34 +1,35 @@
 -- Simplified integration tests that work reliably
-local T = MiniTest.new_set()
 local helpers = require("tests.helpers")
 
 -- Setup and teardown
-T.hooks = {
-  pre_once = function()
-    -- Load plugin with memory backend to avoid file system
-    require("code-review").setup({
-      comment = {
-        storage = { backend = "memory" },
-      },
-    })
-  end,
+local T = MiniTest.new_set({
+  hooks = {
+    pre_once = function()
+      -- Load plugin with memory backend to avoid file system
+      require("code-review").setup({
+        comment = {
+          storage = { backend = "memory" },
+        },
+      })
+    end,
 
-  pre_case = function()
-    -- Reset and reinitialize for clean state
-    local state = require("code-review.state")
-    local memory = require("code-review.storage.memory")
+    pre_case = function()
+      -- Reset and reinitialize for clean state
+      local state = require("code-review.state")
+      local memory = require("code-review.storage.memory")
 
-    -- Use _reset for complete cleanup
-    state._reset()
-    memory._reset()
+      -- Use _reset for complete cleanup
+      state._reset()
+      memory._reset()
 
-    -- Reinitialize
-    state.init()
+      -- Reinitialize
+      state.init()
 
-    -- Clear any existing comments
-    state.clear()
-  end,
-}
+      -- Clear any existing comments
+      state.clear()
+    end,
+  },
+})
 
 -- Test basic formatter integration
 T["formatter integration"] = function()
@@ -122,32 +123,37 @@ T["utils integration"] = function()
   helpers.expect.match(filename, "code%-review%-.*%.md")
 end
 
-T["blockwise selection context"] = function()
-  local utils = require("code-review.utils")
-  local original_buf = vim.api.nvim_get_current_buf()
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_set_current_buf(buf)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
-    "outside before",
-    "  selected_first()",
-    "",
-    "  selected_last()",
-    "outside after",
-  })
+T["characterwise comment keeps selected text through preview and replies"] = function()
+  local ui = require("code-review.ui")
+  local state = require("code-review.state")
+  local formatter = require("code-review.formatter")
 
-  -- Select lines 2-4 in blockwise visual mode
-  vim.api.nvim_win_set_cursor(0, { 2, 3 })
-  vim.cmd("normal! " .. vim.api.nvim_replace_termcodes("<C-v>jj", true, false, true))
-  local context = utils.get_selection_context()
+  -- Add a comment from the selected text
+  local lines = { "xxéfirst", "middle", "終わりsuffix" }
+  local original_input = ui.show_comment_input
+  ui.show_comment_input = function(callback)
+    callback("Selected text")
+  end
+  local ok, err = pcall(helpers.with_selection, lines, { 1, 2 }, "v2j0l", function()
+    require("code-review.comment").add()
+  end)
+  ui.show_comment_input = original_input
+  if not ok then
+    error(err)
+  end
 
-  -- Restore the original buffer before checking the captured context
-  vim.cmd("normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, false, true))
-  vim.api.nvim_set_current_buf(original_buf)
-  vim.api.nvim_buf_delete(buf, { force = true })
+  local comment = state.get_comments()[1]
+  -- Round-trip through preview formatting
+  local formatted = formatter.format({ comment })
+  local parsed = formatter.parse(formatted)
 
-  MiniTest.expect.equality(context.line_start, 2)
-  MiniTest.expect.equality(context.line_end, 4)
-  MiniTest.expect.equality(context.lines, { "  selected_first()", "", "  selected_last()" })
+  -- Add a reply to the parsed comment
+  state.replace_comments(parsed)
+  local reply_id = state.add_reply(parsed[1].id, "Reply")
+  local reply_comment = state.get_comment(reply_id)
+  MiniTest.expect.equality(reply_comment.context_lines, { "éfirst", "middle", "終わ" })
+  MiniTest.expect.equality(reply_comment.col_start, 3)
+  MiniTest.expect.equality(reply_comment.col_end, 4)
 end
 
 return T

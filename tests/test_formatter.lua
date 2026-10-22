@@ -163,6 +163,62 @@ T["format minimal joins multi-line comments"] = function()
   config.setup({ output = { format = "detailed" } })
 end
 
+T["round-trips selection context and columns"] = function()
+  local formatter = require("code-review.formatter")
+  local comment = {
+    file = "test.lua",
+    line_start = 1,
+    line_end = 3,
+    col_start = 3,
+    col_end = 4,
+    context_lines = { "éfirst", "middle", "終わ" },
+    comment = "Selected text",
+    timestamp = 1234567890,
+  }
+
+  local formatted = formatter.format({ comment })
+  local parsed = formatter.parse(formatted)
+
+  MiniTest.expect.equality(#parsed, 1)
+  MiniTest.expect.equality(parsed[1].file, comment.file)
+  MiniTest.expect.equality(parsed[1].line_start, 1)
+  MiniTest.expect.equality(parsed[1].line_end, 3)
+  MiniTest.expect.equality(parsed[1].col_start, 3)
+  MiniTest.expect.equality(parsed[1].col_end, 4)
+  MiniTest.expect.equality(parsed[1].context_lines, comment.context_lines)
+  MiniTest.expect.equality(parsed[1].comment, comment.comment)
+end
+
+T["format minimal selection columns"] = function()
+  local formatter = require("code-review.formatter")
+  local config = require("code-review.config")
+
+  config.setup({ output = { format = "minimal" } })
+  local comments = {
+    {
+      file = "test.lua",
+      line_start = 42,
+      line_end = 45,
+      col_start = 10,
+      col_end = 20,
+      comment = "Selected",
+    },
+    {
+      file = "test.lua",
+      line_start = 50,
+      line_end = 50,
+      col_start = 2,
+      col_end = 4,
+      comment = "Word",
+    },
+  }
+
+  local result = formatter.format(comments)
+  config.setup({ output = { format = "detailed" } })
+
+  MiniTest.expect.equality(result, "test.lua:L42:10-45:20: Selected\ntest.lua:L50:2-4: Word")
+end
+
 T["save to file"] = function()
   local formatter = require("code-review.formatter")
   local test_dir = vim.fn.tempname()

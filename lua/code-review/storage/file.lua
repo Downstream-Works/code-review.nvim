@@ -207,6 +207,8 @@ local function parse_comment_from_file(content, filename)
           file = frontmatter.file or "",
           line_start = tonumber(frontmatter.line_start) or 0,
           line_end = tonumber(frontmatter.line_end) or 0,
+          col_start = tonumber(frontmatter.col_start),
+          col_end = tonumber(frontmatter.col_end),
           author = parsed_author,
           timestamp = parsed_timestamp,
           context_lines = context_lines,
@@ -515,54 +517,7 @@ end
 ---@param comment_data table
 ---@return string
 function M.format_comment_as_markdown(comment_data)
-  local lines = {}
-  local config = require("code-review.config")
-  local date_format = config.get("output.date_format")
-
-  -- YAML frontmatter
-  table.insert(lines, "---")
-  table.insert(lines, "file: " .. comment_data.file)
-  table.insert(lines, "line_start: " .. comment_data.line_start)
-  table.insert(lines, "line_end: " .. comment_data.line_end)
-  table.insert(lines, "time: " .. os.date(date_format, comment_data.timestamp))
-
-  if comment_data.author then
-    table.insert(lines, "author: " .. comment_data.author)
-  end
-
-  if comment_data.thread_id then
-    table.insert(lines, "thread_id: " .. comment_data.thread_id)
-  end
-
-  -- Removed: parent_id, thread_status, resolved_by, resolved_at
-  -- Status is now derived from filename
-
-  table.insert(lines, "---")
-  table.insert(lines, "")
-
-  -- Code context if available
-  if comment_data.context_lines and #comment_data.context_lines > 0 then
-    table.insert(lines, "## Context")
-    table.insert(lines, "")
-    table.insert(lines, "```" .. vim.fn.fnamemodify(comment_data.file, ":e"))
-    for _, line in ipairs(comment_data.context_lines) do
-      table.insert(lines, line)
-    end
-    table.insert(lines, "```")
-    table.insert(lines, "")
-  end
-
-  -- Comments section (even for single comment, use consistent format)
-  table.insert(lines, "## Comments")
-  table.insert(lines, "")
-  table.insert(
-    lines,
-    "### " .. (comment_data.author or vim.fn.expand("$USER")) .. " - " .. os.date(date_format, comment_data.timestamp)
-  )
-  table.insert(lines, "")
-  table.insert(lines, comment_data.comment)
-
-  return table.concat(lines, "\n")
+  return M.format_thread_as_markdown({ comment_data })
 end
 
 --- Get thread information from comments
@@ -736,6 +691,10 @@ function M.format_thread_as_markdown(thread_comments)
   table.insert(lines, "file: " .. root_comment.file)
   table.insert(lines, "line_start: " .. root_comment.line_start)
   table.insert(lines, "line_end: " .. root_comment.line_end)
+  if root_comment.col_start and root_comment.col_end then
+    table.insert(lines, "col_start: " .. root_comment.col_start)
+    table.insert(lines, "col_end: " .. root_comment.col_end)
+  end
   table.insert(lines, "time: " .. os.date(date_format, root_comment.timestamp))
 
   if root_comment.author then

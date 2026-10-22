@@ -39,6 +39,8 @@ function M.add(context_lines)
       file = context.file,
       line_start = context.line_start,
       line_end = context.line_end,
+      col_start = context.col_start,
+      col_end = context.col_end,
       comment = comment_text,
       context_lines = context.lines,
     }

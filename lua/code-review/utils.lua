@@ -81,9 +81,27 @@ function M.get_selection_context(context_lines)
 
   if mode:match("[vV\22]") then
     -- Visual mode
-    local start_line, _, end_line, _ = M.get_visual_range()
+    local start_line, start_col, end_line, end_col = M.get_visual_range()
     context.line_start = start_line
     context.line_end = end_line
+    local region_type = mode
+    if mode == "\22" then
+      local anchor_cols, cursor_cols = vim.fn.virtcol("v", true), vim.fn.virtcol(".", true)
+      start_col = math.min(anchor_cols[1], cursor_cols[1])
+      end_col = math.max(anchor_cols[2], cursor_cols[2])
+      if vim.fn.getcurpos()[5] == vim.v.maxcol then
+        -- A block extended with $ reaches the end of every selected line.
+        for row = start_line, end_line do
+          end_col = math.max(end_col, vim.fn.virtcol({ row, "$" }))
+        end
+        region_type = mode .. (end_col - start_col + 1)
+      end
+    end
+    context.lines = vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = region_type })
+    if mode ~= "V" then
+      context.col_start = start_col
+      context.col_end = end_col
+    end
   else
     -- Normal mode
     local row = vim.api.nvim_win_get_cursor(0)[1]
@@ -92,7 +110,7 @@ function M.get_selection_context(context_lines)
   end
 
   -- Get the actual lines
-  local lines = vim.api.nvim_buf_get_lines(bufnr, context.line_start - 1, context.line_end, false)
+  local lines = context.lines or vim.api.nvim_buf_get_lines(bufnr, context.line_start - 1, context.line_end, false)
   context.lines = lines
   context.line_count = #lines
 

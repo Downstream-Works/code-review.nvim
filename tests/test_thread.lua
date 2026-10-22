@@ -54,10 +54,14 @@ end
 
 T["thread management"]["adds replies to thread"] = function()
   -- Add root comment
+  local context_lines = { "éfirst", "middle", "終わ" }
   local root_id = state.add_comment({
     file = "test.lua",
     line_start = 10,
-    line_end = 10,
+    line_end = 12,
+    col_start = 3,
+    col_end = 4,
+    context_lines = context_lines,
     comment = "Original comment",
   })
 
@@ -69,6 +73,9 @@ T["thread management"]["adds replies to thread"] = function()
   local reply_comment = state.get_comment(reply_id)
   MiniTest.expect.equality(reply_comment.thread_id, root_id .. "_thread")
   MiniTest.expect.equality(reply_comment.parent_id, root_id)
+  MiniTest.expect.equality(reply_comment.context_lines, context_lines)
+  MiniTest.expect.equality(reply_comment.col_start, 3)
+  MiniTest.expect.equality(reply_comment.col_end, 4)
 end
 
 T["thread management"]["resolves and reopens threads"] = function()
@@ -172,6 +179,50 @@ T["thread management"]["handles multiple threads"] = function()
   for _, thread_id in ipairs(thread_ids) do
     MiniTest.expect.equality(threads[thread_id] ~= nil, true)
     MiniTest.expect.equality(threads[thread_id].status, "open")
+  end
+end
+
+T["thread management"]["file storage retains selection context and columns when replying"] = function()
+  local config = require("code-review.config").get_all()
+  local original_dir = config.comment.storage.file.dir
+  local original_status = config.comment.status_management
+  local dir = vim.fn.tempname()
+  config.comment.storage.file.dir = dir
+  config.comment.status_management = false
+  local storage = dofile("lua/code-review/storage/file.lua")
+  local comment = {
+    id = "selection",
+    thread_id = "selection_thread",
+    file = "test.lua",
+    line_start = 2,
+    line_end = 4,
+    col_start = 4,
+    col_end = 7,
+    context_lines = { "elec", "    ", "elec" },
+    comment = "Selected block",
+    timestamp = 1234567890,
+  }
+
+  local ok, loaded = pcall(function()
+    storage.add(comment)
+    local root = storage.get(comment.id)
+    local reply = thread.create_reply(root, "Reply")
+    storage.add(reply)
+    return storage.get_all()
+  end)
+
+  config.comment.storage.file.dir = original_dir
+  config.comment.status_management = original_status
+  vim.fn.delete(dir, "rf")
+  if not ok then
+    error(loaded)
+  end
+
+  MiniTest.expect.equality(#loaded, 2)
+  for _, item in ipairs(loaded) do
+    MiniTest.expect.equality(item.context_lines, comment.context_lines)
+    MiniTest.expect.equality(item.col_start, 4)
+    MiniTest.expect.equality(item.col_end, 7)
   end
 end
 
