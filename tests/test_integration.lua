@@ -156,4 +156,35 @@ T["characterwise comment keeps selected text through preview and replies"] = fun
   MiniTest.expect.equality(reply_comment.col_end, 4)
 end
 
+-- Test editable preview saves
+T["preview editing saves edits through state"] = function()
+  local cr = require("code-review")
+  local state = require("code-review.state")
+
+  -- Add a comment
+  local comment_id = state.add_comment({
+    file = "fixture.lua",
+    line_start = 10,
+    line_end = 10,
+    comment = "Original text",
+  })
+
+  -- Edit and save preview
+  cr.preview()
+  local preview_buf = vim.api.nvim_get_current_buf()
+  local content = table.concat(vim.api.nvim_buf_get_lines(preview_buf, 0, -1, false), "\n")
+  local edited = content:gsub("Original text", "Edited text")
+  vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, vim.split(edited, "\n"))
+  vim.cmd("write")
+  MiniTest.expect.equality(state.get_comment(comment_id).comment, "Edited text")
+
+  -- Verify reopened preview
+  vim.cmd("close")
+  cr.preview()
+  preview_buf = vim.api.nvim_get_current_buf()
+  local reopened = table.concat(vim.api.nvim_buf_get_lines(preview_buf, 0, -1, false), "\n")
+  MiniTest.expect.match(reopened, "Edited text")
+  vim.cmd("close")
+end
+
 return T

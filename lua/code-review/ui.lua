@@ -292,7 +292,8 @@ end
 --- Show preview window
 ---@param content string The formatted content
 ---@param format string Deprecated, always uses markdown
-function M.show_preview(content, format)
+---@param snapshot table Original preview structure and comments
+function M.show_preview(content, format, snapshot)
   local conf = config.get("ui.preview")
   local buf
 
@@ -355,21 +356,21 @@ function M.show_preview(content, format)
   vim.api.nvim_create_autocmd("BufWriteCmd", {
     buffer = buf,
     callback = function()
-      M.handle_preview_save(buf)
-      vim.api.nvim_buf_set_option(buf, "modified", false)
+      M.handle_preview_save(buf, snapshot)
     end,
   })
 end
 
 --- Handle saving preview buffer
 ---@param bufnr number
-function M.handle_preview_save(bufnr)
+---@param snapshot table Original preview structure and comments
+function M.handle_preview_save(bufnr, snapshot)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local content = table.concat(lines, "\n")
 
   -- Parse content back to comments
-  local formatter = require("code-review.formatter")
-  local success, comments = pcall(formatter.parse, content)
+  local preview = require("code-review.preview")
+  local success, comments = pcall(preview.parse, content, snapshot)
 
   if not success then
     vim.notify("Failed to parse preview content: " .. tostring(comments), vim.log.levels.ERROR)
@@ -379,6 +380,7 @@ function M.handle_preview_save(bufnr)
   -- Update state
   local state = require("code-review.state")
   state.replace_comments(comments)
+  vim.api.nvim_buf_set_option(bufnr, "modified", false)
 
   vim.notify("Reviews updated from preview")
 end
