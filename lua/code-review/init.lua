@@ -165,8 +165,9 @@ function M.preview()
     return
   end
 
-  local content = formatter.format(comments)
-  ui.show_preview(content, "markdown")
+  local preview = require("code-review.preview")
+  local content, snapshot = preview.format(comments)
+  ui.show_preview(content, "markdown", snapshot)
 end
 
 --- Save review to file

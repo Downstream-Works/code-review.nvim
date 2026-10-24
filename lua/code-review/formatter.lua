@@ -17,10 +17,12 @@ local function format_range(comment)
   return string.format("%d-%d", comment.line_start, comment.line_end)
 end
 
---- Format comments to markdown
+--- Render detailed Markdown and observe each header, file, and comment structure
+---@private
 ---@param comments table[]
+---@param on_structure? fun(lines: string[], start: integer, file?: string, comment?: table)
 ---@return string
-local function format_markdown(comments)
+function M._format_markdown(comments, on_structure)
   local lines = {}
   local date_format = config.get("output.date_format")
 
@@ -30,6 +32,10 @@ local function format_markdown(comments)
   table.insert(lines, string.format("**Date**: %s", os.date(date_format)))
   table.insert(lines, string.format("**Total Comments**: %d", #comments))
   table.insert(lines, "")
+
+  if on_structure then
+    on_structure(lines, 1)
+  end
 
   -- Group comments by file
   local by_file = {}
@@ -46,6 +52,9 @@ local function format_markdown(comments)
   for _, file in ipairs(files) do
     table.insert(lines, string.format("## %s", file))
     table.insert(lines, "")
+    if on_structure then
+      on_structure(lines, #lines - 1, file)
+    end
 
     local file_comments = by_file[file]
     -- Sort by line number
@@ -54,6 +63,7 @@ local function format_markdown(comments)
     end)
 
     for _, comment in ipairs(file_comments) do
+      local section_start = #lines + 1
       -- Location header
       if comment.line_start == comment.line_end then
         table.insert(lines, "### Line " .. format_range(comment))
@@ -74,6 +84,9 @@ local function format_markdown(comments)
         end
         table.insert(lines, "```")
         table.insert(lines, "")
+      end
+      if on_structure then
+        on_structure(lines, section_start, file, comment)
       end
 
       -- Comment text
@@ -107,7 +120,7 @@ function M.format(comments)
   if format_type == "minimal" then
     return format_minimal(comments)
   else
-    return format_markdown(comments)
+    return M._format_markdown(comments)
   end
 end
 
