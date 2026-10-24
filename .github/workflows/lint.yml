@@ -46,7 +46,7 @@ jobs:
 
       - name: Clone mini.nvim
         run: |
-          git clone --depth 1 https://github.com/echasnovski/mini.nvim deps/mini.nvim
+          git clone --depth 1 https://github.com/nvim-mini/mini.nvim deps/mini.nvim
 
       - name: Verify Neovim installation
         run: nvim --version
