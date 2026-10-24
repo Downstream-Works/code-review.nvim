@@ -155,17 +155,19 @@ end
 ---@param sections table[]
 ---@param current table|nil
 ---@param body string[]
+---@param is_last boolean|nil
 ---@return string[]
-local function finish_preview_section(sections, current, body)
+local function finish_preview_section(sections, current, body, is_last)
   if not current then
     return body
   end
 
-  if body[#body] ~= "" then
+  if body[#body] == "" then
+    table.remove(body)
+  elseif not is_last then
     error("Preview section separator was changed")
   end
 
-  table.remove(body)
   current.body = table.concat(body, "\n")
   table.insert(sections, current)
 
@@ -272,7 +274,7 @@ local function collect_preview_sections(lines, snapshot, retained_locations, ret
     end
   end
 
-  finish_preview_section(sections, current, body)
+  finish_preview_section(sections, current, body, true)
 
   return sections
 end
