@@ -2,14 +2,8 @@ local state = require("code-review.state")
 local file_storage = require("code-review.storage.file")
 local config = require("code-review.config")
 
--- Initialize plugin with file storage and status management enabled for testing
-require("code-review").setup({
-  comment = {
-    storage = { backend = "file" },
-    claude_code_author = "Claude Code",
-    status_management = true, -- Enable for testing
-  },
-})
+local test_dir = vim.fn.tempname()
+local original_config
 
 local T = MiniTest.new_set()
 
@@ -17,17 +11,27 @@ local T = MiniTest.new_set()
 T["filename status management"] = MiniTest.new_set({
   hooks = {
     pre_case = function()
+      original_config = vim.deepcopy(config.get_all())
+
       -- Reset state
       state._reset()
-      state.init()
-      state.clear()
 
-      -- Clean up any test files
-      vim.fn.system("rm -rf .code-review/test_*")
+      -- Initialize plugin with file storage and status management enabled for testing
+      require("code-review").setup({
+        comment = {
+          storage = { backend = "file", file = { dir = test_dir } },
+          claude_code_author = "Claude Code",
+          status_management = true, -- Enable for testing
+        },
+      })
+      state.clear()
     end,
     post_case = function()
       -- Clean up test files
-      vim.fn.system("rm -rf .code-review/test_*")
+      vim.fn.delete(test_dir, "rf")
+      config.setup(original_config)
+      state._reset()
+      state.init()
     end,
   },
 })
@@ -232,20 +236,25 @@ T["filename status management"]["file rename on reply"] = function()
   vim.wait(100)
 
   -- Check initial filename
-  local files = vim.fn.glob(".code-review/action-required_" .. root_id .. ".md", false, true)
+  local files = vim.fn.glob(test_dir .. "/action-required_" .. root_id .. ".md", false, true)
   MiniTest.expect.equality(#files, 1)
 
   -- Add a reply from Claude Code
+  local original_user = vim.env.USER
+  MiniTest.finally(function()
+    vim.env.USER = original_user
+  end)
+  vim.env.USER = "Claude Code"
   state.add_reply(root_id, "I'll fix this")
 
   -- Wait for file operations
   vim.wait(100)
 
   -- Check that file was renamed to waiting-review
-  local old_files = vim.fn.glob(".code-review/action-required_" .. root_id .. ".md", false, true)
+  local old_files = vim.fn.glob(test_dir .. "/action-required_" .. root_id .. ".md", false, true)
   MiniTest.expect.equality(#old_files, 0)
 
-  local new_files = vim.fn.glob(".code-review/waiting-review_" .. root_id .. ".md", false, true)
+  local new_files = vim.fn.glob(test_dir .. "/waiting-review_" .. root_id .. ".md", false, true)
   MiniTest.expect.equality(#new_files, 1)
 end
 
@@ -263,20 +272,25 @@ T["filename status management"]["thread file operations"] = function()
   vim.wait(100)
 
   -- Check comment file exists with correct status
-  local comment_files = vim.fn.glob(".code-review/action-required_" .. comment_id .. ".md", false, true)
+  local comment_files = vim.fn.glob(test_dir .. "/action-required_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#comment_files, 1)
 
   -- Add reply from Claude Code to trigger status change
+  local original_user = vim.env.USER
+  MiniTest.finally(function()
+    vim.env.USER = original_user
+  end)
+  vim.env.USER = "Claude Code"
   state.add_reply(comment_id, "Working on it")
 
   -- Wait for file operations
   vim.wait(100)
 
   -- Check that comment file was renamed
-  local old_comment_files = vim.fn.glob(".code-review/action-required_" .. comment_id .. ".md", false, true)
+  local old_comment_files = vim.fn.glob(test_dir .. "/action-required_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#old_comment_files, 0)
 
-  local new_comment_files = vim.fn.glob(".code-review/waiting-review_" .. comment_id .. ".md", false, true)
+  local new_comment_files = vim.fn.glob(test_dir .. "/waiting-review_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#new_comment_files, 1)
 end
 
@@ -303,7 +317,7 @@ T["filename status management"]["wildcard search for file updates"] = function()
   vim.wait(100)
 
   -- Read the file to verify update
-  local files = vim.fn.glob(".code-review/*_" .. comment_id .. ".md", false, true)
+  local files = vim.fn.glob(test_dir .. "/*_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#files, 1)
 
   local content = vim.fn.readfile(files[1])
@@ -320,6 +334,7 @@ end
 T["filename status management"]["status preserved in list view"] = function()
   -- Create comments with different statuses
   local comment1_id = state.add_comment({
+    id = "list-user",
     file = "list_test.lua",
     line_start = 1,
     line_end = 1,
@@ -328,12 +343,21 @@ T["filename status management"]["status preserved in list view"] = function()
   })
 
   local comment2_id = state.add_comment({
+    id = "list-review",
     file = "list_test.lua",
     line_start = 5,
     line_end = 5,
-    comment = "Comment from Claude Code",
-    author = "Claude Code",
+    comment = "Another comment from user",
+    author = "User",
   })
+
+  -- Add a reply from Claude Code to set waiting-review status
+  local original_user = vim.env.USER
+  MiniTest.finally(function()
+    vim.env.USER = original_user
+  end)
+  vim.env.USER = "Claude Code"
+  state.add_reply(comment2_id, "Ready for review")
 
   -- Wait for files to be created
   vim.wait(100)
@@ -378,10 +402,10 @@ T["filename status management"]["resolve thread updates filename"] = function()
   vim.wait(100)
 
   -- Check that comment file was renamed to resolved
-  local action_files = vim.fn.glob(".code-review/action-required_" .. comment_id .. ".md", false, true)
+  local action_files = vim.fn.glob(test_dir .. "/action-required_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#action_files, 0)
 
-  local resolved_files = vim.fn.glob(".code-review/resolved_" .. comment_id .. ".md", false, true)
+  local resolved_files = vim.fn.glob(test_dir .. "/resolved_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#resolved_files, 1)
 end
 
@@ -408,10 +432,10 @@ T["filename status management"]["status_management disabled"] = function()
   vim.wait(100)
 
   -- Check that file has no status prefix
-  local status_files = vim.fn.glob(".code-review/*_" .. comment_id .. ".md", false, true)
+  local status_files = vim.fn.glob(test_dir .. "/*_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#status_files, 0)
 
-  local plain_files = vim.fn.glob(".code-review/" .. comment_id .. ".md", false, true)
+  local plain_files = vim.fn.glob(test_dir .. "/" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#plain_files, 1)
 
   -- Add a reply
@@ -421,10 +445,10 @@ T["filename status management"]["status_management disabled"] = function()
   vim.wait(100)
 
   -- Check that file still has no status prefix
-  local status_files_after = vim.fn.glob(".code-review/*_" .. comment_id .. ".md", false, true)
+  local status_files_after = vim.fn.glob(test_dir .. "/*_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#status_files_after, 0)
 
-  local plain_files_after = vim.fn.glob(".code-review/" .. comment_id .. ".md", false, true)
+  local plain_files_after = vim.fn.glob(test_dir .. "/" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#plain_files_after, 1)
 
   -- Resolve thread should not rename file and should show warning
@@ -457,10 +481,10 @@ T["filename status management"]["status_management disabled"] = function()
   vim.wait(100)
 
   -- File should still have no status prefix
-  local resolved_files = vim.fn.glob(".code-review/resolved_" .. comment_id .. ".md", false, true)
+  local resolved_files = vim.fn.glob(test_dir .. "/resolved_" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#resolved_files, 0)
 
-  local plain_files_final = vim.fn.glob(".code-review/" .. comment_id .. ".md", false, true)
+  local plain_files_final = vim.fn.glob(test_dir .. "/" .. comment_id .. ".md", false, true)
   MiniTest.expect.equality(#plain_files_final, 1)
 
   -- Restore original setting

@@ -470,7 +470,7 @@ cargo install stylua --features luajit
 luarocks install luacheck
 
 # Clone test dependencies
-git clone --depth 1 https://github.com/echasnovski/mini.nvim deps/mini.nvim
+git clone --depth 1 https://github.com/nvim-mini/mini.nvim deps/mini.nvim
 ```
 
 ### Commands
@@ -494,7 +494,7 @@ make test-formatter
 
 ### Testing
 
-Tests are written using [mini.test](https://github.com/echasnovski/mini.nvim/blob/main/readmes/mini-test.md). Test files should be placed in the `tests/` directory with the naming pattern `test_*.lua`.
+Tests are written using [mini.test](https://github.com/nvim-mini/mini.nvim/blob/main/readmes/mini-test.md). Test files should be placed in the `tests/` directory with the naming pattern `test_*.lua`.
 
 ## 🤝 Contributing
 

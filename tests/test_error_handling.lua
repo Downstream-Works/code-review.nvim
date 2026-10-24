@@ -1,5 +1,4 @@
 -- Error handling tests
-local T = MiniTest.new_set()
 local helpers = require("tests.helpers")
 
 -- Track notify messages
@@ -20,8 +19,11 @@ require("code-review").setup({
 })
 
 -- Setup and teardown
-T.hooks = {
+local original_windows
+local hooks = {
   pre_case = function()
+    original_windows = vim.api.nvim_list_wins()
+
     -- Reset and reinitialize for clean state
     local state = require("code-review.state")
     local memory = require("code-review.storage.memory")
@@ -47,8 +49,15 @@ T.hooks = {
     vim.fn.sign_place = original_sign_place
     vim.fn.sign_unplace = original_sign_unplace
     io.open = original_io_open
+
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if not vim.tbl_contains(original_windows, win) then
+        vim.api.nvim_win_close(win, true)
+      end
+    end
   end,
 }
+local T = MiniTest.new_set({ hooks = hooks })
 
 -- File I/O errors
 T["file I/O errors"] = MiniTest.new_set()
