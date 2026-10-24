@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserve selected characters, block rectangles, and selection columns in review output
 - Preserve comments when saving preview edits
 - Accept final comment edits at EOF
+- Restore Diffview comment indicators
 
 ## [0.6.0] - 2025-12-12
 
