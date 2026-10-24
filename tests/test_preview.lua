@@ -227,6 +227,19 @@ T["preview parsing"]["allows empty comment bodies"] = function()
   MiniTest.expect.equality(parsed, comments)
 end
 
+T["preview parsing"]["allows removing the final blank line"] = function()
+  -- Create a preview with two comments
+  local preview = require("code-review.preview")
+  local comments = preview_comments()
+  local content, snapshot = preview.format(comments)
+
+  -- Remove the final blank line
+  local parsed = preview.parse(content:sub(1, -2), snapshot)
+
+  -- Verify both comments retain their bodies
+  MiniTest.expect.equality(parsed, comments)
+end
+
 T["preview parsing"]["supports repeated edits against the original snapshot"] = function()
   local preview = require("code-review.preview")
   local comments = preview_comments()
