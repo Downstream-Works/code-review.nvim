@@ -71,6 +71,61 @@ end
 local add_signs
 local add_virtual_text
 
+--- Group loaded Diffview candidates by their source file
+---@param file string Comment file path or basename
+---@return table<string, number[]>
+local function get_diffview_buffer_candidates(file)
+  local diffview_buffers = {}
+
+  -- Group matching buffers by source
+  for _, buf in ipairs(vim.fn.getbufinfo({ bufloaded = 1 })) do
+    local root, path = buf.name:match("^diffview://(.-)/%.git/[^/]+/(.+)$")
+    if path and (path == file or root .. "/" .. path == file or vim.fn.fnamemodify(path, ":t") == file) then
+      local source = root .. "/" .. path
+      diffview_buffers[source] = diffview_buffers[source] or {}
+      table.insert(diffview_buffers[source], buf.bufnr)
+    end
+  end
+
+  return diffview_buffers
+end
+
+--- Find ordinary and Diffview buffers for a comment file
+---@param file string Comment file path or basename
+---@return table<number, boolean> Buffer numbers as a set
+local function get_comment_buffers(file)
+  local buffers = {}
+
+  -- Find the ordinary buffer
+  local bufnr = vim.fn.bufnr(file)
+  if bufnr ~= -1 then
+    buffers[bufnr] = true
+  end
+
+  -- Resolve Diffview sources
+  local diffview_buffers = get_diffview_buffer_candidates(file)
+  local absolute_path = vim.fn.fnamemodify(file, ":p")
+  local project_path = utils.get_project_root() .. "/" .. file
+
+  -- Legacy basenames resolve only when every candidate version shares one source.
+  local unique_basename = file == vim.fn.fnamemodify(file, ":t") and vim.tbl_count(diffview_buffers) == 1
+
+  for source, source_buffers in pairs(diffview_buffers) do
+    if source == absolute_path or source == project_path or unique_basename then
+      for _, buf in ipairs(source_buffers) do
+        buffers[buf] = true
+      end
+
+      local source_buf = vim.fn.bufnr(source)
+      if source_buf ~= -1 then
+        buffers[source_buf] = true
+      end
+    end
+  end
+
+  return buffers
+end
+
 --- Update visual indicators (signs and virtual text)
 function M.update_indicators()
   local config = require("code-review.config")
@@ -82,8 +137,7 @@ function M.update_indicators()
   -- Group comments by buffer
   local comments_by_buf = {}
   for _, comment in ipairs(comments) do
-    local bufnr = vim.fn.bufnr(comment.file)
-    if bufnr ~= -1 then
+    for bufnr in pairs(get_comment_buffers(comment.file)) do
       comments_by_buf[bufnr] = comments_by_buf[bufnr] or {}
       table.insert(comments_by_buf[bufnr], comment)
     end
